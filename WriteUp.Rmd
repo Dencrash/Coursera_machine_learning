@@ -1,0 +1,89 @@
+---
+title: "Coursera - Practical Machine Learning"
+author: "Tobias Nack"
+date: "Thursday, October 23, 2014"
+output: html_document
+---
+
+##Target
+
+This project deals with the prediction of common mistakes made while doing barbell lifts based on data taken with different accelerators. The original data is available [here](http://groupware.les.inf.puc-rio.br/har). 
+
+##Preparation
+
+The following preparations were taken before starting to work with the data
+
+```{r}
+library(lattice)
+library(ggplot2)
+library(caret)
+library(randomForest)
+set.seed(333)
+```
+
+##Analysis and Cleaning
+
+After reading in the data with default settings, the summary showed that the data included division by zero errors, which needed to be purged. The data is also filled with empty strings and na values. Therefore, the first step to improve our data is changing the settings, while loading the data.
+
+```{r}
+data = read.csv(file = "pml-training.csv", na.strings=c("#DIV/0!" , "", "NA"))
+```
+
+Furthermore we can exclude the first 7 columns of the data, since they include metainformation about the data. Predictions based on this metadata would not be useful since the correlation will not match new data taken. The following plot actually shows that taking the metadata into consideration would be harmful for our predictions since the classe can be easily determined by the index. Leaing to the exclusion of the metadata.
+
+```{r, echo=FALSE}
+plot(data$X,data$classe)
+```
+```{r}
+data = data[,c(-1,-2,-3,-4,-5,-6,-7)]
+```
+
+Lastly, trying to train the data actually lead to an error since there is no row found includes no na values. This lead me to deleting the columns that include na values with the following command:
+
+```{r}
+cleanedData = sapply(1:153,function(x) all (!is.na(data[,x])))
+
+cleanedData = data[,cleanedData]
+```
+
+##Splitting the data
+
+Following the guidelines given by the course we split the data into training- and test-set to later do out of sample cross-validation.
+
+```{r}
+inTrain = createDataPartition(y=cleanedData$classe, p=0.6, list=FALSE)
+
+trainingset <- cleanedData[inTrain,]
+testset <- cleanedData[-inTrain,]
+```
+
+##Training
+
+I trained on the data with 3 different methods:
+
+- the random forest model
+- the general boosting model
+- the CART model
+
+Comparing the predictions of the trained formula on the test set showed that the random forest algoritm showed best accuracy. Thus, the last part of the writeUp will work with the random forest algorithm.
+
+```{r}
+modelFit = randomForest(classe~.,data=trainingset, ntree=50)
+```
+
+We are using the randomForest() function to create our model on the trainings data, with classe as element to predict and all other variables(since the data is already cleaned) as predictors. We also limited the number of trees to 50 since the default setting take too long to calculate (60+ minutes) on the available hardware.
+
+##Validating
+
+To validate our result we use the testset and try to predict the classe variable with our prediction model and use the confusionMatrix() function of the caret package.
+
+```{r}
+result = predict(modelFit, testset)
+confusionMatrix(result,testset$classe)
+```
+
+As one can see, the prediction model reached an accuracy of around 99% on the testset.
+
+##Conclusion
+
+Common machine learning algorithms perform well on the data provided for the tasks. Problematic is the fact that the data only includes the form of 6 different users. Thus, our prediction model may not perform as well on the data of users that did not participate in the first study.
